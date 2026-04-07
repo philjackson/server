@@ -49,6 +49,10 @@ class SyncGroupPlayer(Player):
         self._attr_device_info = DeviceInfo(model=provider.name, manufacturer=APPLICATION_NAME)
         self._group_lock = asyncio.Lock()
 
+    def _cancel_resume_timer(self) -> None:
+        """Cancel any delayed resume scheduled during leader re-selection."""
+        self.mass.cancel_timer(f"syncgroup_resume_{self.player_id}")
+
     @cached_property
     def is_dynamic(self) -> bool:
         """Return if the player is a dynamic group player."""
@@ -336,6 +340,7 @@ class SyncGroupPlayer(Player):
     async def stop(self) -> None:
         """Send STOP command to given player."""
         async with self._group_lock:
+            self._cancel_resume_timer()
             self._attr_current_media = None
             sync_leader = self.sync_leader
             # dissolve the sync group since we stopped playback
@@ -351,6 +356,7 @@ class SyncGroupPlayer(Player):
     async def play(self) -> None:
         """Send PLAY (unpause) command to given player."""
         async with self._group_lock:
+            self._cancel_resume_timer()
             active_source = self._attr_active_source
             current_media = self._attr_current_media
         # call resume outside the lock since it re-enters play_media -> _group_lock
@@ -359,6 +365,7 @@ class SyncGroupPlayer(Player):
     async def play_media(self, media: PlayerMedia) -> None:
         """Handle PLAY MEDIA on given player."""
         async with self._group_lock:
+            self._cancel_resume_timer()
             self._attr_current_media = media
             self._attr_active_source = media.source_id or None
             await self._form_syncgroup()
@@ -397,6 +404,7 @@ class SyncGroupPlayer(Player):
         player_ids_to_remove: list[str] | None = None,
     ) -> None:
         """Handle SET_MEMBERS command (lock must be held by caller)."""
+        self._cancel_resume_timer()
         if not self.is_dynamic:
             raise UnsupportedFeaturedException(
                 f"Group {self.display_name} does not allow dynamically adding/removing members!"

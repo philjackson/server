@@ -1,0 +1,1 @@
+"""Sync group provider tests."""
