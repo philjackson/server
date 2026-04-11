@@ -134,6 +134,7 @@ class MusicAssistant:
         self._providers: dict[str, ProviderInstanceType] = {}
         self._tracked_tasks: dict[str, asyncio.Task[Any]] = {}
         self._tracked_timers: dict[str, asyncio.TimerHandle] = {}
+        self.hass_provider_ready: asyncio.Event = asyncio.Event()
         self.running_as_hass_addon: bool = False
         self.version: str = "0.0.0"
         self.logger = LOGGER
@@ -756,6 +757,8 @@ class MusicAssistant:
                     "Error while unloading provider %s: %s", provider.name, str(err), exc_info=err
                 )
             finally:
+                if provider.domain == "hass":
+                    self.hass_provider_ready.clear()
                 self._providers.pop(instance_id, None)
                 self.discovery.on_provider_unload(instance_id)
                 await self._update_available_providers_cache()
@@ -962,6 +965,10 @@ class MusicAssistant:
             provider.name,
         )
         provider.available = True
+
+        # signal hass provider readiness for auth startup race condition
+        if provider.domain == "hass":
+            self.hass_provider_ready.set()
 
         # adapt logging name if needed
         provider._set_log_level_from_config(provider.config)
