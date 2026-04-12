@@ -440,8 +440,7 @@ class ConfigController:
                 }
             ):
                 extra_entries.append(CONF_ENTRY_LIBRARY_SYNC_BACK)
-            if provider and isinstance(provider, MusicProvider) and provider.is_streaming_provider:
-                extra_entries.append(CONF_ENTRY_LIBRARY_SYNC_DELETIONS)
+            extra_entries.append(CONF_ENTRY_LIBRARY_SYNC_DELETIONS)
 
         all_entries = [
             *DEFAULT_PROVIDER_CONFIG_ENTRIES,
