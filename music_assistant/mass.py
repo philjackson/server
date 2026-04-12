@@ -16,7 +16,7 @@ import aiofiles
 from aiofiles.os import wrap
 from music_assistant_models.api import ServerInfoMessage
 from music_assistant_models.auth import UserRole
-from music_assistant_models.enums import CoreState, EventType, ProviderType
+from music_assistant_models.enums import CoreState, EventType, ProviderFeature, ProviderType
 from music_assistant_models.errors import MusicAssistantError, SetupFailedError
 from music_assistant_models.event import MassEvent
 from music_assistant_models.helpers import set_global_cache_values
@@ -55,8 +55,10 @@ from music_assistant.helpers.util import (
     warn_if_missing_x86_64_v2,
 )
 from music_assistant.models import ProviderInstanceType
+from music_assistant.models.audio_analysis_provider import AudioAnalysisProvider
 from music_assistant.models.music_provider import MusicProvider
 from music_assistant.models.player_provider import PlayerProvider
+from music_assistant.models.plugin import PluginProvider
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -95,6 +97,13 @@ def is_music_provider(provider: ProviderInstanceType) -> TypeGuard[MusicProvider
 def is_player_provider(provider: ProviderInstanceType) -> TypeGuard[PlayerProvider]:
     """Type guard that returns true if a provider is a player provider."""
     return provider.type == ProviderType.PLAYER
+
+
+def is_audio_analysis_provider(
+    provider: ProviderInstanceType,
+) -> TypeGuard[AudioAnalysisProvider]:
+    """Type guard that returns true if a provider is an audio analysis provider."""
+    return provider.type == ProviderType.AUDIO_ANALYSIS
 
 
 class MusicAssistant:
@@ -416,6 +425,19 @@ class MusicAssistant:
             and (return_unavailable or prov.available)
         ]
 
+    def get_plugins_by_feature(self, feature: ProviderFeature) -> list[PluginProvider]:
+        """Return all available PluginProvider instances that support the given feature."""
+        return cast(
+            "list[PluginProvider]",
+            [
+                prov
+                for prov in list(self._providers.values())
+                if prov.available
+                and isinstance(prov, PluginProvider)
+                and feature in prov.supported_features
+            ],
+        )
+
     def signal_event(
         self,
         event: EventType,
@@ -713,7 +735,7 @@ class MusicAssistant:
 
     async def unload_provider(self, instance_id: str, is_removed: bool = False) -> None:
         """Unload a provider."""
-        self.music.unschedule_provider_sync(instance_id)
+        self.music.unschedule_provider_sync(instance_id, clear_persisted_state=is_removed)
         if provider := self._providers.get(instance_id):
             if isinstance(provider, PlayerProvider):
                 await self.players.on_provider_unload(provider)
